@@ -1,2 +1,4 @@
-# flask-ocr
-Flask OCR
+ 
+ 
+ pip install tesseract
+pip install pytesseract

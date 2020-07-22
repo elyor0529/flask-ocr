@@ -50,7 +50,7 @@ def return_ocr_file(files):
             content = image_to_string(img, lang='eng')
             output.write(content + '\r\n')
         output.close()
-        return send_file(filename_or_fp=result, attachment_filename="result-" + timestamp + ".txt", as_attachment=True)
+        return send_file(filename_or_fp=result, attachment_filename=timestamp + ".txt", as_attachment=True)
     except Exception as e:
         resp = jsonify({'message': str(e)})
         resp.status_code = 400
