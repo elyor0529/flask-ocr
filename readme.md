@@ -1,4 +1,5 @@
  
  
- pip install tesseract
+pip install tesseract
+
 pip install pytesseract
