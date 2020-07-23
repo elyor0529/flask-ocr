@@ -1,5 +1,4 @@
-Teseract packages:
- 
-pip install tesseract
+   
+docker build -t myimage .
 
-pip install pytesseract
+docker run -d --name mycontainer -p 80:80 myimage
