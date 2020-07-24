@@ -1,5 +1,3 @@
-pip install Pillow
+Download Tesseract & install include test-data(all of languages):
 
-pip install Flask
-
-pip install pytesseract
+https://github.com/UB-Mannheim/tesseract/wiki

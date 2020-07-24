@@ -3,14 +3,14 @@ import time
 from PIL import Image
 from flask import Flask, request, jsonify, send_file
 from pytesseract import image_to_string, pytesseract
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder="static")
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 
 if os.name == 'nt':
-    pytesseract.tesseract_cmd = os.path.join(
-        app.static_folder, "teseract", "tesseract.exe")
+    pytesseract.tesseract_cmd = 'C:\Program Files\Tesseract-OCR\tesseract.exe'
 else:
     pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
@@ -42,6 +42,12 @@ def upload_file():
             resp = jsonify({'message': 'Allowed file types are png,jpg'})
             resp.status_code = 400
             return resp
+
+            timestamp = time.strftime("%Y%m%d%H%M%S")
+            saved_path = os.path.join(
+                app.static_folder, "tmp", timestamp + secure_filename(file.filename))
+            file.save(saved_path)
+
     return return_ocr_file(files)
 
 

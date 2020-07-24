@@ -4,7 +4,6 @@ COPY ./app /app
 
 RUN pip install -r /app/requirements.txt
 
-# setup tesseract-ocr engine  https://github.com/tesseract-ocr/tesseract/wiki
 RUN sh -c 'apt-get -y update'
 RUN sh -c 'apt-get -y install tesseract-ocr'
 RUN sh -c 'apt-get -y install libtesseract-dev'
