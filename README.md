@@ -1,3 +1,3 @@
-docker build -t myimage .
+docker-compose build
 
-docker run -d --name mycontainer -p 80:80 myimage
+docker-compose up -d
