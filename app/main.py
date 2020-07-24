@@ -9,8 +9,9 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 
 if os.name == 'nt':
-    pytesseract.tesseract_cmd = os.path.join(app.static_folder, "teseract", "tesseract.exe")
-else: 
+    pytesseract.tesseract_cmd = os.path.join(
+        app.static_folder, "teseract", "tesseract.exe")
+else:
     pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
 
