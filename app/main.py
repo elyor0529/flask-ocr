@@ -43,10 +43,9 @@ def upload_file():
             resp.status_code = 400
             return resp
 
-            timestamp = time.strftime("%Y%m%d%H%M%S")
-            saved_path = os.path.join(
-                app.static_folder, "tmp", timestamp + secure_filename(file.filename))
-            file.save(saved_path)
+        timestamp = time.strftime("%Y%m%d%H%M%S")
+        saved_path = os.path.join(app.static_folder, "tmp", timestamp+"_" + secure_filename(file.filename))
+        file.save(saved_path)
 
     return return_ocr_file(files)
 
