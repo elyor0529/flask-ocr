@@ -7,10 +7,10 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder="static")
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
-
+app.config['TES_LANG'] = os.environ.get('TES_LAN', default="eng")
 
 if os.name == 'nt':
-    pytesseract.tesseract_cmd = 'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
 else:
     pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
@@ -44,7 +44,8 @@ def upload_file():
             return resp
 
         timestamp = time.strftime("%Y%m%d%H%M%S")
-        saved_path = os.path.join(app.static_folder, "tmp", timestamp+"_" + secure_filename(file.filename))
+        saved_path = os.path.join(
+            app.static_folder, "tmp", timestamp+"_" + secure_filename(file.filename))
         file.save(saved_path)
 
     return return_ocr_file(files)
@@ -57,7 +58,7 @@ def return_ocr_file(files):
         output = open(result, 'w+')
         for file in files:
             img = Image.open(file.stream)
-            content = image_to_string(img, lang='eng')
+            content = image_to_string(img, lang=app.config['TES_LANG'])
             output.write(content + '\r\n')
         output.close()
         return send_file(filename_or_fp=result, attachment_filename=timestamp + ".txt", as_attachment=True)
