@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 import time
 from PIL import Image
 from flask import Flask, request, jsonify, send_file
-from pytesseract import image_to_data,image_to_string, pytesseract 
+from pytesseract import image_to_data,image_to_string,image_to_osd, pytesseract 
 from azure.storage.blob import BlobClient
 from azure.servicebus import ServiceBusClient,Message
 import logging
@@ -26,7 +26,6 @@ AZURE_SERV_TOP_SEND = os.getenv('AZURE_SERV_TOP_SEND', default="topic1")
 logging.basicConfig(level=logging.NOTSET,format='[%(levelname)s] (%(threadName)-10s) %(message)s')
 
 # tesseract
-TES_LANG = os.getenv('TES_LAN', default="eng")
 if os.name == 'nt':
     pytesseract.tesseract_cmd = os.getenv('TES_PATH', default=r"C:\Program Files\Tesseract-OCR\tesseract.exe") 
 else:
@@ -72,9 +71,11 @@ def upload_file():
         img = Image.open(saved_path)
         result_data=None
         if(result_format=="tsv"):
-            result_data = image_to_data(img, lang=TES_LANG)
+            result_data = image_to_data(img)
+        elif(result_format=="osd"):
+            result_data = image_to_osd(img)
         else:
-            result_data = image_to_string(img, lang=TES_LANG)
+            result_data = image_to_string(img)
         with open(result_path, 'wb') as result_file:
             result_file.write(str.encode(result_data)) 
         logging.info("{} recognized!".format(saved_path))
@@ -98,7 +99,7 @@ def _file_is_allowed(file_name):
     return '.' in file_name and file_name.rsplit('.', 1)[1].lower() in allowed_extensions
 
 def _format_is_allowed(fmt):
-    allowed_extensions = {'txt', 'tsv'}
+    allowed_extensions = {'txt', 'tsv','osd'}
     return fmt in allowed_extensions
 
 
@@ -153,9 +154,11 @@ def _downlod_blob(msg):
                 img = Image.open(saved_path)
                 result_data=None
                 if(result_format=="tsv"):
-                    result_data = image_to_data(img, lang=TES_LANG)
+                    result_data = image_to_data(img)
+                elif(result_format=="osd"):
+                    result_data = image_to_osd(img)
                 else:
-                    result_data = image_to_string(img, lang=TES_LANG)
+                    result_data = image_to_string(img)
                 result_blob.write(str.encode(result_data))
             logging.info("{} recognized!".format(result_path))
 
@@ -164,7 +167,7 @@ def _downlod_blob(msg):
                 upload_blob.upload_blob(upload_data)
             logging.info("{} uploaded!".format(result_path))
 
-            result_url=str.replace(file_url,file_name,file_prefix + "_" + result_prefix + "."+result_format)
+            result_url=str.replace(file_url,file_name,  result_prefix + "."+result_format)
             _send_topic(reqId,result_url)
 
         else:

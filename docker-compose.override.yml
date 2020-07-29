@@ -8,8 +8,7 @@ services:
       - "80:80"
     environment:
       - FLASK_APP=main.py
-      - FLASK_DEBUG=1
-      - TES_LANG=eng
+      - FLASK_DEBUG=1 
       - TES_PATH=/usr/bin/tesseract
       - AZURE_BLOB_STOR_CONN=DefaultEndpointsProtocol=https;AccountName=ssmtest2;AccountKey=F6wNhZnDUHh7vEw6bxeQb2yrz1Iqw1GPh9uLqwPwxjBUCNjYro3TGUum/kFnr25tG/fWzrqpauVhPnKUEPZAwA==;EndpointSuffix=core.windows.net
       - AZURE_BLOB_CONT_NAME=images
