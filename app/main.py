@@ -119,18 +119,6 @@ def _process_queue():
         time.sleep(sleep_time)
         _start_job()
   
-job_listener = Process(target=_process_queue)
-
-def _start_job():
-    try:
-        if job_listener.is_alive():
-            job_listener.terminate()
-        job_listener.start()
-
-        logging.info("Job started")
-    except Exception as e:
-        logging.error(e)
-
 def _downlod_blob(msg):
      
     try:
@@ -206,6 +194,25 @@ def _send_topic(req_id,file_url):
     duration_time = end_time - start_time
     logging.info("send! ({0} sec)".format(duration_time))
 
+job_listener= None
+
+def _start_job():
+
+    try:
+        global job_listener
+    
+        if job_listener==None:
+           job_listener= Process(target=_process_queue)
+        else:
+            job_listener.terminate() 
+
+        job_listener.start()
+
+        logging.info("Job started")
+    except Exception as e:
+        logging.error(e)
+
+_start_job()
+
 if __name__ == '__main__':
-    _start_job()
     app.run(host="0.0.0.0", debug=True, port=80)
