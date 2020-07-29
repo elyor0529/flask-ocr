@@ -85,9 +85,9 @@ def upload_file():
                     entry_path = os.path.join(app.static_folder, "files",file_prefix + "_" + result_prefix + "."+fmt)
                     img = Image.open(saved_path)
                     result_data=None
-                    if(result_format=="tsv"):
+                    if(fmt=="tsv"):
                         result_data = image_to_data(img)
-                    elif(result_format=="osd"):
+                    elif(fmt=="osd"):
                         result_data = image_to_osd(img)
                     else:
                         result_data = image_to_string(img)
@@ -196,9 +196,9 @@ def _downlod_blob(msg):
             with open(result_path, 'wb') as result_blob:
                 img = Image.open(saved_path)
                 result_data=None
-                if(result_format=="tsv"):
+                if(fmt=="tsv"):
                     result_data = image_to_data(img)
-                elif(result_format=="osd"):
+                elif(fmt=="osd"):
                     result_data = image_to_osd(img)
                 else:
                     result_data = image_to_string(img)
