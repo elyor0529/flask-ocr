@@ -1,6 +1,8 @@
 import os
 from werkzeug.utils import secure_filename
 from urllib.parse import urlparse
+import io
+from zipfile import ZipFile
 import time
 from PIL import Image
 from flask import Flask, request, jsonify, send_file
@@ -40,14 +42,7 @@ def home_page():
 def upload_file():
 
     try:
-
-        result_format = request.args.get('format')
-        if 'format' not in request.args:
-            raise Exception('No format')
-
-        if  not _format_is_allowed(result_format):
-           raise Exception('Only txt,tsv formats')
-
+        
         if 'file' not in request.files:
             raise Exception('No file part')
   
@@ -58,27 +53,66 @@ def upload_file():
 
         if not _file_is_allowed(file_name):
             raise Exception('Allowed only png,jpg formats')
+ 
+        if 'format' not in request.args:
+            raise Exception('No format')
 
+        result_format = request.args.get('format')
+        result_formats=[]
+        if ',' in result_format:
+            result_formats=result_format.split(',')
+            if not _formats_is_allowed(result_formats):
+                raise Exception('Only txt,tsv,osd formats')
+        else:
+            if not _format_is_allowed(result_format):
+                raise Exception('Only txt,tsv,osd formats')
+ 
         start_time = time.time()
         file_prefix = time.strftime("%Y%m%d%H%M%S")
+
         saved_path = os.path.join(app.static_folder, "files", file_prefix + "_" + secure_filename(file_name))
         file.save(saved_path)
         logging.info("{} uploaded!".format(saved_path))
         
         result_prefix = os.path.splitext(file_name)[0]
-        result_path = os.path.join(app.static_folder, "files",file_prefix + "_" + result_prefix + "."+result_format)
-       
-        img = Image.open(saved_path)
-        result_data=None
-        if(result_format=="tsv"):
-            result_data = image_to_data(img)
-        elif(result_format=="osd"):
-            result_data = image_to_osd(img)
+        
+        if len(result_formats)>0:
+
+            result_path = os.path.join(app.static_folder, "files",file_prefix + "_" + result_prefix + ".zip")
+            zip_entries=[]
+            with ZipFile(result_path, 'w') as zipObj:
+                for fmt in result_formats:
+                    entry_path = os.path.join(app.static_folder, "files",file_prefix + "_" + result_prefix + "."+fmt)
+                    img = Image.open(saved_path)
+                    result_data=None
+                    if(result_format=="tsv"):
+                        result_data = image_to_data(img)
+                    elif(result_format=="osd"):
+                        result_data = image_to_osd(img)
+                    else:
+                        result_data = image_to_string(img)
+                    with open(entry_path, 'wb') as result_file:
+                        result_file.write(str.encode(result_data)) 
+                    zipObj.write(entry_path,result_prefix + "."+fmt)
+                    zip_entries.append(entry_path)
+                    logging.info("{} recognized!".format(saved_path))
+            for zip_entry in zip_entries:
+                os.remove(zip_entry)
+                logging.info("{} deleted!".format(zip_entry))
         else:
-            result_data = image_to_string(img)
-        with open(result_path, 'wb') as result_file:
-            result_file.write(str.encode(result_data)) 
-        logging.info("{} recognized!".format(saved_path))
+ 
+            result_path = os.path.join(app.static_folder, "files",file_prefix + "_" + result_prefix + "."+result_format)
+            img = Image.open(saved_path)
+            result_data=None
+            if(result_format=="tsv"):
+                result_data = image_to_data(img)
+            elif(result_format=="osd"):
+                result_data = image_to_osd(img)
+            else:
+                result_data = image_to_string(img)
+            with open(result_path, 'wb') as result_file:
+                result_file.write(str.encode(result_data)) 
+            logging.info("{} recognized!".format(saved_path))
 
         end_time = time.time()
         duration_time = end_time - start_time
@@ -86,7 +120,10 @@ def upload_file():
         msg = "finished! ({0} sec)".format(duration_time)
         logging.info(msg)
 
-        return send_file(filename_or_fp=result_path, attachment_filename=file_prefix + "."+result_format,as_attachment=True)
+        if len(result_formats)>0:
+            return send_file(filename_or_fp=result_path, attachment_filename=file_prefix + ".zip",as_attachment=True)
+        else:
+            return send_file(filename_or_fp=result_path, attachment_filename=file_prefix + "."+result_format,as_attachment=True)
     except Exception as e:
         logging.error(e)
         resp = jsonify({'message': str(e)})
@@ -101,6 +138,12 @@ def _file_is_allowed(file_name):
 def _format_is_allowed(fmt):
     allowed_extensions = {'txt', 'tsv','osd'}
     return fmt in allowed_extensions
+
+def _formats_is_allowed(fmts):
+    allowed_extensions = {'txt', 'tsv','osd'}
+    for fmt in fmts:
+        return fmt in allowed_extensions
+    return False
 
 
 def _process_queue():
