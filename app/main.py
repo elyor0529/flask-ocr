@@ -32,12 +32,21 @@ if os.name == 'nt':
     pytesseract.tesseract_cmd = os.getenv('TES_PATH', default=r"C:\Program Files\Tesseract-OCR\tesseract.exe") 
 else:
     pytesseract.tesseract_cmd = os.getenv('TES_PATH', default=r"/usr/bin/tesseract")
-  
-@app.route('/')
-def home_page():
-    return 'Tesseract OCR Api!'
+   
+def _file_is_allowed(file_name):
+    allowed_extensions = {'png', 'jpg'}
+    return '.' in file_name and file_name.rsplit('.', 1)[1].lower() in allowed_extensions
 
+def _format_is_allowed(fmt):
+    allowed_extensions = {'txt', 'tsv','osd'}
+    return fmt in allowed_extensions
 
+def _formats_is_allowed(fmts):
+    allowed_extensions = {'txt', 'tsv','osd'}
+    for fmt in fmts:
+        return fmt in allowed_extensions
+    return False
+    
 @app.route('/upload', methods=['POST'])
 def upload_file():
 
@@ -75,7 +84,8 @@ def upload_file():
         logging.info("{} uploaded!".format(saved_path))
         
         result_prefix = os.path.splitext(file_name)[0]
-        
+        result_path=None
+
         if len(result_formats)>0:
 
             result_path = os.path.join(app.static_folder, "files",file_prefix + "_" + result_prefix + ".zip")
@@ -95,7 +105,7 @@ def upload_file():
                         result_file.write(str.encode(result_data)) 
                     zipObj.write(entry_path,result_prefix + "."+fmt)
                     zip_entries.append(entry_path)
-                    logging.info("{} recognized!".format(saved_path))
+                    logging.info("{} recognized!".format(entry_path))
             for zip_entry in zip_entries:
                 os.remove(zip_entry)
                 logging.info("{} deleted!".format(zip_entry))
@@ -130,21 +140,18 @@ def upload_file():
         resp.status_code = 400
         return resp
 
+def _download_blob(saved_path,file_name):
+    download_blob = BlobClient.from_connection_string(conn_str=AZURE_BLOB_STOR_CONN, container_name=AZURE_BLOB_CONT_NAME, blob_name=file_name)
+    with open(saved_path, "wb") as file_blob:
+        blob_data = download_blob.download_blob()
+        blob_data.readinto(file_blob)
+    logging.info("{} downloaded!".format(saved_path))
 
-def _file_is_allowed(file_name):
-    allowed_extensions = {'png', 'jpg'}
-    return '.' in file_name and file_name.rsplit('.', 1)[1].lower() in allowed_extensions
-
-def _format_is_allowed(fmt):
-    allowed_extensions = {'txt', 'tsv','osd'}
-    return fmt in allowed_extensions
-
-def _formats_is_allowed(fmts):
-    allowed_extensions = {'txt', 'tsv','osd'}
-    for fmt in fmts:
-        return fmt in allowed_extensions
-    return False
-
+def _upload_blob(result_path,file_name):
+    upload_blob = BlobClient.from_connection_string(conn_str=AZURE_BLOB_STOR_CONN, container_name=AZURE_BLOB_CONT_NAME, blob_name=file_name)
+    with open(result_path, "rb") as upload_data:
+        upload_blob.upload_blob(upload_data)
+    logging.info("{} uploaded!".format(result_path))
 
 def _process_queue():
     sleep_time = 1
@@ -155,7 +162,7 @@ def _process_queue():
             with client.get_queue_receiver(AZURE_SERV_QUE_NAME) as receiver:
                 for message in receiver:
                     logging.info("Receiving: {}".format(message))
-                    _downlod_blob(message)
+                    _process_message(message)
             time.sleep(sleep_time)
     except Exception as e:
         logging.error(e)
@@ -163,7 +170,7 @@ def _process_queue():
         time.sleep(sleep_time)
         _start_job()
   
-def _downlod_blob(msg):
+def _process_message(msg):
      
     try:
         reqId = msg.user_properties[b"requestId"]
@@ -176,6 +183,14 @@ def _downlod_blob(msg):
 
         result_format = objReq["format"]
         logging.info("Result format: {}".format(result_format))
+        result_formats=[]
+        if ',' in result_format:
+            result_formats=result_format.split(',')
+            if not _formats_is_allowed(result_formats):
+                raise Exception('Only txt,tsv,osd formats')
+        else:
+            if not _format_is_allowed(result_format):
+                raise Exception('Only txt,tsv,osd formats')
          
         file_path = urlparse(file_url)
         file_name = os.path.basename(file_path.path)
@@ -184,33 +199,54 @@ def _downlod_blob(msg):
             
             file_prefix = time.strftime("%Y%m%d%H%M%S")
             saved_path = os.path.join(app.static_folder, "jobs",file_prefix + "_" + AZURE_BLOB_CONT_NAME + "_" + file_name)
-            download_blob = BlobClient.from_connection_string(conn_str=AZURE_BLOB_STOR_CONN, container_name=AZURE_BLOB_CONT_NAME, blob_name=file_name)
-            
-            with open(saved_path, "wb") as file_blob:
-                blob_data = download_blob.download_blob()
-                blob_data.readinto(file_blob)
-            logging.info("{} downloaded!".format(saved_path))
+            _download_blob(saved_path,file_name)
 
             result_prefix = os.path.splitext(file_name)[0]
-            result_path = os.path.join(app.static_folder, "jobs", file_prefix + "_" + AZURE_BLOB_CONT_NAME + "_" + result_prefix + "."+result_format)
-            with open(result_path, 'wb') as result_blob:
+            if len(result_formats)>0:
+                result_path = os.path.join(app.static_folder, "jobs",file_prefix + "_" + result_prefix + ".zip")
+                zip_entries=[]
+                with ZipFile(result_path, 'w') as zipObj:
+                    for fmt in result_formats:
+                        entry_path = os.path.join(app.static_folder, "jobs",file_prefix + "_" + result_prefix + "."+fmt)
+                        img = Image.open(saved_path)
+                        result_data=None
+                        if(fmt=="tsv"):
+                            result_data = image_to_data(img)
+                        elif(fmt=="osd"):
+                            result_data = image_to_osd(img)
+                        else:
+                            result_data = image_to_string(img)
+                        with open(entry_path, 'wb') as result_file:
+                            result_file.write(str.encode(result_data)) 
+                        zipObj.write(entry_path,result_prefix + "."+fmt)
+                        zip_entries.append(entry_path)
+                        logging.info("{} recognized!".format(entry_path))
+                for zip_entry in zip_entries:
+                    os.remove(zip_entry)
+                    logging.info("{} deleted!".format(zip_entry))
+            else:
+                result_path = os.path.join(app.static_folder, "jobs", file_prefix + "_" + AZURE_BLOB_CONT_NAME + "_" + result_prefix + "."+result_format)
                 img = Image.open(saved_path)
                 result_data=None
-                if(fmt=="tsv"):
+                if(result_format=="tsv"):
                     result_data = image_to_data(img)
-                elif(fmt=="osd"):
+                elif(result_format=="osd"):
                     result_data = image_to_osd(img)
                 else:
                     result_data = image_to_string(img)
-                result_blob.write(str.encode(result_data))
-            logging.info("{} recognized!".format(result_path))
+                with open(result_path, 'wb') as result_file:
+                    result_file.write(str.encode(result_data)) 
+                logging.info("{} recognized!".format(saved_path))
+  
+            result_url=None
+            if len(result_formats)>0:
+                result_url=str.replace(file_url,file_name,  result_prefix + ".zip") 
+                _upload_blob(result_path,result_prefix + ".zip")
+            else:
+                result_url=str.replace(file_url,file_name,  result_prefix + "."+result_format)
+                _upload_blob(result_path,result_prefix + "."+result_format)
 
-            upload_blob = BlobClient.from_connection_string(conn_str=AZURE_BLOB_STOR_CONN, container_name=AZURE_BLOB_CONT_NAME, blob_name=result_prefix + "."+result_format)
-            with open(result_path, "rb") as upload_data:
-                upload_blob.upload_blob(upload_data)
-            logging.info("{} uploaded!".format(result_path))
 
-            result_url=str.replace(file_url,file_name,  result_prefix + "."+result_format)
             _send_topic(reqId,result_url)
 
         else:
@@ -218,7 +254,7 @@ def _downlod_blob(msg):
     except Exception as e:
         logging.error(str(e)) 
     finally:
-        msg.complete()
+        msg.complete() 
 
 def _send_topic(req_id,file_url):
     logging.info("Sending to topic message: {}".format(file_url))
